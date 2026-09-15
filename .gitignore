@@ -1,0 +1,20 @@
+node_modules
+dist
+dist-electron
+*.log
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+*.tsbuildinfo
+build/
+
+# Test/scratch artifacts
+g*.json
+gfg*.json
+out*.json
+dev-test.log
