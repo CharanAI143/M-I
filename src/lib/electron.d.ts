@@ -1,3 +1,5 @@
+import type { AlarmConfig, AIGeneratePayload, IpcChannels } from '../types/ipc'
+
 declare module '*.wasm?url' {
   const src: string
   export default src
@@ -12,42 +14,19 @@ declare global {
   interface Window {
     electron: any
     secure?: {
-      storeApiKey: (apiKey: string) => Promise<unknown>
-      getApiKey: () => Promise<string>
-      deleteApiKey: () => Promise<unknown>
-      generateAI: (payload: {
-        provider: string
-        apiKey: string
-        model: string
-        systemPrompt: string
-        userPrompt: string
-        customEndpoint?: string
-        temperature?: number
-        maxTokens?: number
-      }) => Promise<string>
+      storeApiKey: (apiKey: string) => Promise<IpcChannels['ai:secure-store']['res']>
+      getApiKey: () => Promise<IpcChannels['ai:secure-get']['res']>
+      deleteApiKey: () => Promise<IpcChannels['ai:secure-delete']['res']>
+      generateAI: (payload: AIGeneratePayload) => Promise<IpcChannels['ai:generate']['res']>
     }
     alarm?: {
-      set: (config: {
-        enabled: boolean
-        remindMinutes: number
-        platform: 'codechef' | 'leetcode' | 'codeforces'
-      }) => Promise<unknown>
-      get: () => Promise<{
-        enabled: boolean
-        remindMinutes: number
-        platform: 'codechef' | 'leetcode' | 'codeforces'
-      }>
-      onChanged: (
-        callback: (config: {
-          enabled: boolean
-          remindMinutes: number
-          platform: 'codechef' | 'leetcode' | 'codeforces'
-        }) => void
-      ) => () => void
+      set: (config: AlarmConfig) => Promise<IpcChannels['alarm:set']['res']>
+      get: () => Promise<IpcChannels['alarm:get']['res']>
+      onChanged: (callback: (config: AlarmConfig) => void) => () => void
     }
     app?: {
-      getLaunchAtLogin: () => Promise<{ enabled: boolean }>
-      setLaunchAtLogin: (enabled: boolean) => Promise<{ enabled: boolean }>
+      getLaunchAtLogin: () => Promise<IpcChannels['app:get-login']['res']>
+      setLaunchAtLogin: (enabled: boolean) => Promise<IpcChannels['app:set-login']['res']>
     }
   }
 }

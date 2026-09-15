@@ -5,6 +5,21 @@ import { writeFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { alarmManager, type AlarmPlatform } from './alarm'
+import type { IpcChannels, IpcChannelName } from '../src/types/ipc'
+import { ALARM_CHANGED_EVENT } from '../src/types/ipc'
+
+// Typed wrapper around ipcMain.handle. The channel name — not the bare string —
+// is the source of truth for the request/response shapes, so a channel can only
+// be wired up in a type-safe way.
+function handleChannel<C extends IpcChannelName>(
+  channel: C,
+  handler: (
+    event: Electron.IpcMainInvokeEvent,
+    req: IpcChannels[C]['req']
+  ) => IpcChannels[C]['res'] | Promise<IpcChannels[C]['res']>
+): void {
+  ipcMain.handle(channel, handler)
+}
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -182,7 +197,7 @@ app.whenReady().then(() => {
 
   // Fetch a remote page/endpoint from the main process.
   // This bypasses renderer CORS so the app can scrape GFG / CodeChef course pages.
-  ipcMain.handle('course:fetch:text', async (_event, url: string) => {
+  handleChannel('course:fetch:text', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       throw new Error('Invalid URL')
     }
@@ -201,7 +216,7 @@ app.whenReady().then(() => {
   // Fetch a stats endpoint (GFG profile API) from the main process.
   // These unofficial APIs don't send CORS headers, so a renderer fetch is
   // blocked — this bypasses it the same way course scraping does.
-  ipcMain.handle('stats:fetch-text', async (_event, url: string) => {
+  handleChannel('stats:fetch-text', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       throw new Error('Invalid URL')
     }
@@ -218,7 +233,7 @@ app.whenReady().then(() => {
   })
 
   // Check if a YouTube video is available (returns 200 and contains video player).
-  ipcMain.handle('yt:check', async (_event, url: string) => {
+  handleChannel('yt:check', async (_event, url) => {
     if (typeof url !== 'string' || !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url)) {
       return { available: false, reason: 'invalid_url' }
     }
@@ -244,7 +259,7 @@ app.whenReady().then(() => {
   })
 
   // Render the notes HTML to a real PDF (via an offscreen window) and save it.
-  ipcMain.handle('notes:save-pdf', async (event, payload: { suggestedName?: string; html?: string }) => {
+  handleChannel('notes:save-pdf', async (event, payload) => {
     const suggestedName =
       typeof payload?.suggestedName === 'string' && payload.suggestedName.trim()
         ? payload.suggestedName
@@ -283,10 +298,10 @@ app.whenReady().then(() => {
         ],
       }
       const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
-      if (result.canceled || !result.filePath) return { saved: false, canceled: true }
+      if (result.canceled || !result.filePath) return { saved: false, canceled: true } as const
 
       await writeFile(result.filePath, pdf)
-      return { saved: true, filePath: result.filePath }
+      return { saved: true, filePath: result.filePath } as const
     } finally {
       docWin.destroy()
     }
@@ -295,7 +310,7 @@ app.whenReady().then(() => {
   // ── Secure API key storage (encrypted via OS-level safeStorage) ──────────
   const SECURE_KEY_FILE = join(app.getPath('userData'), 'ai_key.enc')
 
-  ipcMain.handle('ai:secure-store', async (_event, apiKey: string) => {
+  handleChannel('ai:secure-store', async (_event, apiKey) => {
     if (typeof apiKey !== 'string') throw new Error('API key must be a string')
     if (apiKey && safeStorage.isEncryptionAvailable()) {
       const encrypted = safeStorage.encryptString(apiKey)
@@ -310,10 +325,10 @@ app.whenReady().then(() => {
         unlinkSync(SECURE_KEY_FILE)
       }
     }
-    return { ok: true }
+    return { ok: true } as const
   })
 
-  ipcMain.handle('ai:secure-get', async () => {
+  handleChannel('ai:secure-get', async () => {
     if (!existsSync(SECURE_KEY_FILE)) return ''
     try {
       const buf = readFileSync(SECURE_KEY_FILE)
@@ -326,12 +341,12 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('ai:secure-delete', async () => {
+  handleChannel('ai:secure-delete', async () => {
     if (existsSync(SECURE_KEY_FILE)) {
       const { unlinkSync } = await import('fs')
       unlinkSync(SECURE_KEY_FILE)
     }
-    return { ok: true }
+    return { ok: true } as const
   })
 
   // ── Database file persistence ────────────────────────────────────────────
@@ -341,18 +356,18 @@ app.whenReady().then(() => {
   // makes the data survive app reinstalls that clear the renderer session.
   const DB_FILE = join(app.getPath('userData'), 'mi-tracker-db.sqlite')
 
-  ipcMain.handle('db:save', async (_event, base64Data: string) => {
+  handleChannel('db:save', async (_event, base64Data) => {
     try {
       const buffer = Buffer.from(base64Data, 'base64')
       writeFileSync(DB_FILE, buffer)
-      return { ok: true }
+      return { ok: true } as const
     } catch (e) {
       console.error('Failed to save database file:', e)
-      return { ok: false, error: String(e) }
+      return { ok: false, error: String(e) } as const
     }
   })
 
-  ipcMain.handle('db:load', async () => {
+  handleChannel('db:load', async () => {
     try {
       if (!existsSync(DB_FILE)) return null
       const buffer = readFileSync(DB_FILE)
@@ -363,30 +378,21 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('db:reset', async () => {
+  handleChannel('db:reset', async () => {
     try {
       if (existsSync(DB_FILE)) unlinkSync(DB_FILE)
-      return { ok: true }
+      return { ok: true } as const
     } catch (e) {
       console.error('Failed to reset database file:', e)
-      return { ok: false, error: String(e) }
+      return { ok: false, error: String(e) } as const
     }
   })
 
   // ── AI proxy: route provider calls through main process so the API key
   //    never touches the renderer bundle. ───────────────────────────────────
-  ipcMain.handle(
+  handleChannel(
     'ai:generate',
-    async (_event, payload: {
-      provider: string
-      apiKey: string
-      model: string
-      systemPrompt: string
-      userPrompt: string
-      customEndpoint?: string
-      temperature?: number
-      maxTokens?: number
-    }) => {
+    async (_event, payload) => {
       const { provider, apiKey, model, systemPrompt, userPrompt, customEndpoint, temperature = 0.7, maxTokens = 4096 } = payload
 
       const endpoints: Record<string, string> = {
@@ -471,7 +477,7 @@ app.whenReady().then(() => {
   // ── Background contest alarm (survives window close) ─────────────────────
   alarmManager.init()
 
-  ipcMain.handle('alarm:set', (_event, config) => {
+  handleChannel('alarm:set', (_event, config) => {
     const enabled = config?.enabled === true
     const remindMinutes =
       typeof config?.remindMinutes === 'number' && config.remindMinutes > 0
@@ -488,13 +494,13 @@ app.whenReady().then(() => {
     return alarmManager.getConfig()
   })
 
-  ipcMain.handle('alarm:get', () => alarmManager.getConfig())
+  handleChannel('alarm:get', () => alarmManager.getConfig())
 
-  ipcMain.handle('app:get-login', () => ({
+  handleChannel('app:get-login', () => ({
     enabled: app.getLoginItemSettings().openAtLogin,
   }))
 
-  ipcMain.handle('app:set-login', (_event, enabled: boolean) => {
+  handleChannel('app:set-login', (_event, enabled) => {
     app.setLoginItemSettings({ openAtLogin: enabled === true })
     return { enabled: enabled === true }
   })
@@ -531,7 +537,7 @@ function updateTrayMenu(): void {
       click: () => {
         alarmManager.configure({ ...config, enabled: !config.enabled })
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('alarm:changed', alarmManager.getConfig())
+          mainWindow.webContents.send(ALARM_CHANGED_EVENT, alarmManager.getConfig())
         }
         updateTrayMenu()
       },

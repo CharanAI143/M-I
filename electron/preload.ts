@@ -1,41 +1,37 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { AlarmConfig, AIGeneratePayload, IpcChannels, IpcChannelName } from '../src/types/ipc'
+import { ALARM_CHANGED_EVENT } from '../src/types/ipc'
+
+function invoke<C extends IpcChannelName>(
+  channel: C,
+  req: IpcChannels[C]['req']
+): Promise<IpcChannels[C]['res']> {
+  return ipcRenderer.invoke(channel, req)
+}
 
 // Secure bridge — only exposes the minimal AI key operations needed by the UI.
 // The raw key travels over IPC but is stored/processed in the main process.
 const secureAPI = {
-  storeApiKey: (apiKey: string) => ipcRenderer.invoke('ai:secure-store', apiKey),
-  getApiKey: () => ipcRenderer.invoke('ai:secure-get'),
-  deleteApiKey: () => ipcRenderer.invoke('ai:secure-delete'),
-  generateAI: (payload: {
-    provider: string
-    apiKey: string
-    model: string
-    systemPrompt: string
-    userPrompt: string
-    customEndpoint?: string
-    temperature?: number
-    maxTokens?: number
-  }) => ipcRenderer.invoke('ai:generate', payload),
+  storeApiKey: (apiKey: string) => invoke('ai:secure-store', apiKey),
+  getApiKey: () => invoke('ai:secure-get', undefined),
+  deleteApiKey: () => invoke('ai:secure-delete', undefined),
+  generateAI: (payload: AIGeneratePayload) => invoke('ai:generate', payload),
 }
 
 const alarmAPI = {
-  set: (config: {
-    enabled: boolean
-    remindMinutes: number
-    platform: 'codechef' | 'leetcode' | 'codeforces'
-  }) => ipcRenderer.invoke('alarm:set', config),
-  get: () => ipcRenderer.invoke('alarm:get'),
-  onChanged: (callback: (config: unknown) => void) => {
-    const listener = (_event: unknown, config: unknown) => callback(config)
-    ipcRenderer.on('alarm:changed', listener)
-    return () => ipcRenderer.removeListener('alarm:changed', listener)
+  set: (config: AlarmConfig) => invoke('alarm:set', config),
+  get: () => invoke('alarm:get', undefined),
+  onChanged: (callback: (config: AlarmConfig) => void) => {
+    const listener = (_event: unknown, config: AlarmConfig) => callback(config)
+    ipcRenderer.on(ALARM_CHANGED_EVENT, listener)
+    return () => ipcRenderer.removeListener(ALARM_CHANGED_EVENT, listener)
   },
 }
 
 const appAPI = {
-  getLaunchAtLogin: () => ipcRenderer.invoke('app:get-login'),
-  setLaunchAtLogin: (enabled: boolean) => ipcRenderer.invoke('app:set-login', enabled),
+  getLaunchAtLogin: () => invoke('app:get-login', undefined),
+  setLaunchAtLogin: (enabled: boolean) => invoke('app:set-login', enabled),
 }
 
 if (process.contextIsolated) {

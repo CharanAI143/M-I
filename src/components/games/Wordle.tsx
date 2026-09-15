@@ -61,12 +61,6 @@ function getCellColor(state: CellState): string {
   }
 }
 
-function getKeyColor(guessedLetters: Map<string, CellState>): string {
-  return 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-}
-
-const ROW_LABELS = ['1st', '2nd', '3rd', '4th', '5th', '6th']
-
 function selectWord(previous?: string): string {
   let word = WORDS[Math.floor(Math.random() * WORDS.length)]
   // Avoid repeating the same word consecutively

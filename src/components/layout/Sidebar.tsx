@@ -1,28 +1,42 @@
 import { LayoutDashboard, User, StickyNote, Sparkles, Settings, Loader2, Mic, Target, Database } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { AppIcon } from '@/components/AppIcon'
+import { ROUTES } from '@/lib/routes'
+import type { RoutePath } from '@/lib/routes'
 
-const baseNavItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'profiles', label: 'Profiles', icon: User },
-  { id: 'notes', label: 'Notes', icon: StickyNote },
-  { id: 'roadmap', label: 'Study', icon: Sparkles },
-  { id: 'interview', label: 'Interview', icon: Mic },
-  { id: 'planner', label: 'Planner', icon: Target },
-  { id: 'settings', label: 'Settings', icon: Settings },
+interface NavItem {
+  id: RoutePath
+  label: string
+  icon: LucideIcon
+}
+
+const baseNavItems: NavItem[] = [
+  { id: ROUTES.dashboard, label: 'Dashboard', icon: LayoutDashboard },
+  { id: ROUTES.profiles, label: 'Profiles', icon: User },
+  { id: ROUTES.notes, label: 'Notes', icon: StickyNote },
+  { id: ROUTES.roadmap, label: 'Study', icon: Sparkles },
+  { id: ROUTES.interview, label: 'Interview', icon: Mic },
+  { id: ROUTES.planner, label: 'Planner', icon: Target },
+  { id: ROUTES.settings, label: 'Settings', icon: Settings },
 ]
 
 export function Sidebar() {
-  const { activeModule, setActiveModule, isSyncing, settings } = useAppStore()
+  const { isSyncing, settings } = useAppStore()
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  const navItems = [
+  const navItems: NavItem[] = [
     ...baseNavItems.slice(0, -1),
     ...(settings?.sqlMode
-      ? [{ id: 'sql', label: 'SQL', icon: Database }]
+      ? [{ id: ROUTES.sql, label: 'SQL', icon: Database } satisfies NavItem]
       : []),
     ...baseNavItems.slice(-1),
   ]
+
+  const isActive = (id: RoutePath) => location.pathname === id
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-card">
@@ -35,10 +49,10 @@ export function Sidebar() {
         {navItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => setActiveModule(item.id)}
+            onClick={() => navigate(item.id)}
             className={cn(
               'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              activeModule === item.id
+              isActive(item.id)
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             )}

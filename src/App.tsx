@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import Dashboard from '@/modules/Dashboard'
 import Profiles from '@/modules/Profiles'
@@ -8,13 +9,23 @@ import Interview from '@/modules/Interview'
 import Planner from '@/modules/Planner'
 import Settings from '@/modules/Settings'
 import Sql from '@/modules/Sql'
-import { useAppStore, dbApi, dbStore } from '@/store'
-import { syncAllPlatforms } from '@/lib/api'
+import { useAppStore } from '@/store'
+import { dbApi, dbStore } from '@/lib/db'
 import { secureGetApiKey } from '@/lib/secure'
 import { getToday } from '@/lib/utils'
+import type { AISettings } from '@/lib/types'
+import { ROUTES } from '@/lib/routes'
 
-function App() {
-  const { activeModule, settings, setProfiles, setActivities, setLastSynced, setIsSyncing, setDailyTarget, setQuestionBank, updateSettings, setClockWarning } = useAppStore()
+export default function App() {
+  return (
+    <HashRouter>
+      <AppContent />
+    </HashRouter>
+  )
+}
+
+function AppContent() {
+  const { settings, setProfiles, setActivities, setDailyTarget, setQuestionBank, updateSettings, setClockWarning } = useAppStore()
 
   // Initial data load
   useEffect(() => {
@@ -76,7 +87,7 @@ function App() {
             ai: {
               ...settings.ai,
               apiKey: savedApiKey || settings.ai.apiKey,
-              provider: (savedProvider as any) ?? settings.ai.provider,
+              provider: (savedProvider as AISettings['provider']) ?? settings.ai.provider,
               model: savedModel ?? settings.ai.model,
               customEndpoint: savedCustomEndpoint ?? settings.ai.customEndpoint,
             },
@@ -87,6 +98,21 @@ function App() {
         const savedSqlMode = await dbStore.get('sql_mode')
         if (savedSqlMode != null) {
           updateSettings({ sqlMode: savedSqlMode === 'true' })
+        }
+
+        // Load persisted auto-sync / sync interval preferences.
+        const [savedAutoSync, savedSyncInterval] = await Promise.all([
+          dbStore.get('auto_sync'),
+          dbStore.get('sync_interval'),
+        ])
+        if (savedAutoSync != null) {
+          updateSettings({ autoSync: savedAutoSync === 'true' })
+        }
+        if (savedSyncInterval != null) {
+          const intervalVal = Number(savedSyncInterval)
+          if (Number.isFinite(intervalVal) && intervalVal > 0) {
+            updateSettings({ syncInterval: intervalVal })
+          }
         }
 
         // Load persisted poster gallery preference (Marvel / DC / Anime).
@@ -119,6 +145,7 @@ function App() {
       }
     }
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Background sync service - every 15 minutes
@@ -127,50 +154,27 @@ function App() {
 
     const syncInterval = (settings.syncInterval || 15) * 60 * 1000
 
-    const interval = setInterval(async () => {
-      try {
-        setIsSyncing(true)
-        const profiles = await dbApi.loadProfiles()
-        const platformProfiles = profiles
-          .filter(p => p.username)
-          .map(p => ({ platform: p.platform as any, username: p.username }))
-        if (platformProfiles.length > 0) {
-          await syncAllPlatforms(platformProfiles)
-        }
-        const updated = await dbApi.loadProfiles()
-        setProfiles(updated)
-        const activities = await dbApi.loadActivities()
-        setActivities(activities)
-        setLastSynced(new Date().toISOString())
-      } catch (e) {
-        console.error('Background sync failed:', e)
-      } finally {
-        setIsSyncing(false)
-      }
+    const interval = setInterval(() => {
+      useAppStore.getState().syncNow()
     }, syncInterval)
 
     return () => clearInterval(interval)
   }, [settings.autoSync, settings.syncInterval])
 
-  const renderModule = () => {
-    switch (activeModule) {
-      case 'dashboard': return <Dashboard />
-      case 'profiles': return <Profiles />
-      case 'notes': return <Notes />
-      case 'roadmap': return <Roadmap />
-      case 'interview': return <Interview />
-      case 'sql': return <Sql />
-      case 'planner': return <Planner />
-      case 'settings': return <Settings />
-      default: return <Dashboard />
-    }
-  }
-
   return (
     <Layout>
-      {renderModule()}
+      <Routes>
+        <Route path="/" element={<Navigate to={ROUTES.dashboard} replace />} />
+        <Route path={ROUTES.dashboard} element={<Dashboard />} />
+        <Route path={ROUTES.profiles} element={<Profiles />} />
+        <Route path={ROUTES.notes} element={<Notes />} />
+        <Route path={ROUTES.roadmap} element={<Roadmap />} />
+        <Route path={ROUTES.interview} element={<Interview />} />
+        <Route path={ROUTES.sql} element={<Sql />} />
+        <Route path={ROUTES.planner} element={<Planner />} />
+        <Route path={ROUTES.settings} element={<Settings />} />
+        <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
+      </Routes>
     </Layout>
   )
 }
-
-export default App

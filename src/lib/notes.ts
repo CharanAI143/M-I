@@ -1701,12 +1701,13 @@ export function findWebNotes(topic: string, limit = 3): WebNote[] {
       if (seen.has(note.url)) continue
       seen.add(note.url)
       out.push(note)
+      if (out.length >= limit) return out
     }
   }
 
   // Universal fallback for any unmatched topic: no dead links — the Notes
   // dialog builds real refined notes for it instead (see loadRefinedNotesFor).
-  return []
+  return out
 }
 
 // Find the refined notes for a topic (authored/rewritten from IIT & NIT lecture notes).

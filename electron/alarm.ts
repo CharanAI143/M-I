@@ -1,8 +1,9 @@
 import { Notification, net, app, shell } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import type { AlarmPlatform, AlarmConfig } from '../src/types/ipc'
 
-export type AlarmPlatform = 'codechef' | 'leetcode' | 'codeforces'
+export type { AlarmPlatform, AlarmConfig }
 
 export interface Contest {
   platform: AlarmPlatform
@@ -10,12 +11,6 @@ export interface Contest {
   url: string
   startTime: number
   duration: number
-}
-
-export interface AlarmConfig {
-  enabled: boolean
-  remindMinutes: number
-  platform: AlarmPlatform
 }
 
 type TimerHandle = ReturnType<typeof setTimeout>

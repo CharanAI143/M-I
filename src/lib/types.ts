@@ -45,37 +45,6 @@ export interface Note {
   updatedAt: string
 }
 
-export interface CourseProblem {
-  id: string
-  title: string
-  url?: string
-  difficulty?: string
-  done: boolean
-}
-
-export interface CourseModule {
-  id: string
-  title: string
-  done: boolean
-  url?: string
-  problems?: CourseProblem[]
-}
-
-export interface Course {
-  id: number
-  name: string
-  url: string
-  total_modules: number
-  completed_modules: number
-  status: string
-  notes: string
-  modules?: CourseModule[]
-  started_at: string
-  last_active_at: string
-  created_at: string
-  updated_at: string
-}
-
 export interface TodoItem {
   id: string
   text: string

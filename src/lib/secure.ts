@@ -2,16 +2,7 @@
 // The API key is never persisted in the renderer — it is stored encrypted in
 // the main process (Electron safeStorage) and AI calls are proxied from there.
 
-interface AIGeneratePayload {
-  provider: string
-  apiKey: string
-  model: string
-  systemPrompt: string
-  userPrompt: string
-  customEndpoint?: string
-  temperature?: number
-  maxTokens?: number
-}
+import type { AIGeneratePayload } from '@/types'
 
 function hasBridge(): boolean {
   return typeof window.secure?.storeApiKey === 'function'

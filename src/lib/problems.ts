@@ -199,7 +199,6 @@ export async function pickDailyProblems(
 
   const cfEasy = cfProblems.filter((p) => typeof p.rating === 'number' && p.rating <= 1000)
   const cfMedium = cfProblems.filter((p) => typeof p.rating === 'number' && p.rating >= 1100 && p.rating <= 1500)
-  const cfHard = cfProblems.filter((p) => typeof p.rating === 'number' && p.rating >= 1600 && p.rating <= 2200)
 
   const toCF = (p: CFProblem, diff: PickedProblem['difficulty']): PickedProblem => ({
     id: `cf-${p.contestId}${p.index}`,

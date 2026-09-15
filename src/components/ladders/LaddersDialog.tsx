@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { dbApi } from '@/store'
+import { dbApi } from '@/lib/db'
 import { CF_LADDERS, fetchLadderProblems } from '@/lib/ladders'
 import { fetchCodeforcesSolved, cfSolveKey } from '@/lib/codeforces'
 import type { Ladder } from '@/lib/types'
@@ -195,7 +195,7 @@ export function LaddersDialog({ open, onOpenChange, handle }: LaddersDialogProps
                       {isExpanded && (
                         <ScrollArea className="h-32 rounded-md border">
                           <div className="p-1">
-                            {l.problems.map((p, i) => {
+                            {l.problems.map((p) => {
                               const isSolved = solved.has(cfSolveKey(p.contestId, p.index))
                               return (
                                 <a

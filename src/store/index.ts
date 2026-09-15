@@ -1,6 +1,8 @@
 import { create } from 'zustand'
-import type { Profile, ActivityLog, DailyTarget, Course, Note, AppSettings, MockQuestion } from '@/lib/types'
+import type { Profile, ActivityLog, DailyTarget, Note, AppSettings, MockQuestion, Platform } from '@/lib/types'
 import { loadTagCounts } from '@/lib/badges'
+import { dbApi, dbStore } from '@/lib/db'
+import { syncAllPlatforms } from '@/services/sync-coordinator'
 
 export const defaultSettings: AppSettings = {
   autoSync: true,
@@ -23,13 +25,11 @@ function createInitialState() {
     profiles: [],
     activities: [],
     dailyTarget: null,
-    courses: [],
     notes: [],
     questionBank: [],
     settings: defaultSettings,
     lastSynced: null,
     isSyncing: false,
-    activeModule: 'dashboard',
     tagCounts: loadTagCounts(),
     clockWarning: null,
   }
@@ -39,13 +39,11 @@ interface AppState {
   profiles: Profile[]
   activities: ActivityLog[]
   dailyTarget: DailyTarget | null
-  courses: Course[]
   notes: Note[]
   questionBank: MockQuestion[]
   settings: AppSettings
   lastSynced: string | null
   isSyncing: boolean
-  activeModule: string
   tagCounts: Record<string, number>
   clockWarning: string | null
 
@@ -57,13 +55,13 @@ interface AppState {
   updateSettings: (settings: Partial<AppSettings>) => void
   setLastSynced: (time: string) => void
   setIsSyncing: (syncing: boolean) => void
-  setActiveModule: (module: string) => void
   setTagCounts: (counts: Record<string, number>) => void
   setClockWarning: (warning: string | null) => void
   resetStore: () => void
+  syncNow: () => Promise<void>
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   ...createInitialState(),
 
   setProfiles: (profiles) => set({ profiles }),
@@ -77,11 +75,52 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setLastSynced: (lastSynced) => set({ lastSynced }),
   setIsSyncing: (isSyncing) => set({ isSyncing }),
-  setActiveModule: (activeModule) => set({ activeModule }),
   setTagCounts: (tagCounts) => set({ tagCounts }),
   setClockWarning: (clockWarning) => set({ clockWarning }),
   resetStore: () => set(createInitialState()),
+
+  // Single source of truth for a manual / interval sync pass. Replaces the
+  // duplicated sync loops that used to live in App (background) and Header
+  // (Sync Now button).
+  syncNow: async () => {
+    if (get().isSyncing) return
+    set({ isSyncing: true })
+    try {
+      const profiles = await dbApi.loadProfiles()
+      const platformProfiles = profiles
+        .filter((p) => p.username)
+        .map((p) => ({ platform: p.platform as Platform, username: p.username }))
+      if (platformProfiles.length > 0) {
+        await syncAllPlatforms(platformProfiles)
+      }
+      const updated = await dbApi.loadProfiles()
+      const activities = await dbApi.loadActivities()
+      set({ profiles: updated, activities, lastSynced: new Date().toISOString() })
+    } catch (e) {
+      console.error('Background sync failed:', e)
+    } finally {
+      set({ isSyncing: false })
+    }
+  },
 }))
 
-// Database API helpers (backed by sql.js/WASM in the renderer)
-export { dbApi, dbStore, resetAllData, resetDatabase } from '@/lib/db'
+// Central settings persistence. Any `updateSettings` write is mirrored to the
+// on-disk key/value store so preferences survive restarts (including autoSync
+// / syncInterval, which previously were never persisted). The API key is NOT
+// written here — it is stored encrypted in the main process via safeStorage.
+useAppStore.subscribe((state, prev) => {
+  if (state.settings === prev.settings) return
+  const s = state.settings
+  const persist = async () => {
+    dbStore.set('auto_sync', String(s.autoSync))
+    dbStore.set('sync_interval', String(s.syncInterval))
+    dbStore.set('contest_remind_minutes', String(s.contestRemindMinutes))
+    dbStore.set('sql_mode', String(s.sqlMode))
+    dbStore.set('anime_poster', String(s.animePoster))
+    dbStore.set('poster_category', s.posterCategory)
+    dbStore.set('ai_provider', s.ai.provider)
+    dbStore.set('ai_model', s.ai.model)
+    dbStore.set('ai_custom_endpoint', s.ai.customEndpoint)
+  }
+  void persist()
+})
