@@ -34,18 +34,12 @@ const appAPI = {
   setLaunchAtLogin: (enabled: boolean) => invoke('app:set-login', enabled),
 }
 
-const overlayAPI = {
-  get: () => invoke('window:get-always-ontop', undefined),
-  set: (enabled: boolean) => invoke('window:set-always-ontop', enabled),
-}
-
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('secure', secureAPI)
     contextBridge.exposeInMainWorld('alarm', alarmAPI)
     contextBridge.exposeInMainWorld('app', appAPI)
-    contextBridge.exposeInMainWorld('overlay', overlayAPI)
   } catch (error) {
     console.error(error)
   }
@@ -58,6 +52,4 @@ if (process.contextIsolated) {
   window.alarm = alarmAPI
   // @ts-ignore
   window.app = appAPI
-  // @ts-ignore
-  window.overlay = overlayAPI
 }

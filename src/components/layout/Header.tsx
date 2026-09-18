@@ -1,4 +1,4 @@
-import { RefreshCw, Clock, Pin, PinOff } from 'lucide-react'
+import { RefreshCw, Clock } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -23,7 +23,6 @@ export function Header() {
   const { lastSynced, isSyncing } = useAppStore()
   const location = useLocation()
   const [schemeColor, setSchemeColor] = useState(() => getGlowBackground())
-  const [alwaysOnTop, setAlwaysOnTop] = useState(false)
 
   useEffect(() => {
     const sync = () => setSchemeColor(getGlowBackground())
@@ -37,24 +36,8 @@ export function Header() {
     }
   }, [])
 
-  useEffect(() => {
-    window.overlay
-      ?.get()
-      .then((r) => setAlwaysOnTop(r.enabled))
-      .catch(() => {})
-  }, [])
-
   const handleSync = () => {
     useAppStore.getState().syncNow()
-  }
-
-  const handleTogglePin = () => {
-    const next = !alwaysOnTop
-    setAlwaysOnTop(next)
-    window.overlay
-      ?.set(next)
-      .then((r) => setAlwaysOnTop(r.enabled))
-      .catch(() => setAlwaysOnTop(!next))
   }
 
   return (
@@ -71,17 +54,6 @@ export function Header() {
             <span>Last synced: {new Date(lastSynced).toLocaleTimeString()}</span>
           </div>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleTogglePin}
-          title={alwaysOnTop ? 'Hovering over other apps — click to unpin' : 'Stay on top of other apps (like Copilot)'}
-          className={alwaysOnTop ? 'gap-2 border-transparent text-white shadow-sm' : 'gap-2'}
-          style={alwaysOnTop ? { backgroundImage: schemeColor } : undefined}
-        >
-          {alwaysOnTop ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          {alwaysOnTop ? 'Unpin' : 'Pin'}
-        </Button>
         <Button
           variant="outline"
           size="sm"

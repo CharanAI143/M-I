@@ -70,7 +70,6 @@ type WindowState = {
   x?: number
   y?: number
   isMaximized?: boolean
-  alwaysOnTop?: boolean
 }
 
 function loadWindowState(): WindowState | null {
@@ -83,7 +82,6 @@ function loadWindowState(): WindowState | null {
       width: clamp(saved.width, DEFAULT_WIN_WIDTH, MIN_WIN_WIDTH),
       height: clamp(saved.height, DEFAULT_WIN_HEIGHT, MIN_WIN_HEIGHT),
       isMaximized: saved.isMaximized === true,
-      alwaysOnTop: saved.alwaysOnTop === true,
     }
     if (typeof saved.x === 'number' && typeof saved.y === 'number') {
       state.x = saved.x
@@ -93,18 +91,6 @@ function loadWindowState(): WindowState | null {
   } catch {
     return null
   }
-}
-
-// Keep the "always on top" (Copilot-style hover over other apps) flag in sync
-// with the rest of the persisted window state so it survives restarts.
-function setMainWindowAlwaysOnTop(enabled: boolean): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.setAlwaysOnTop(enabled, 'screen-saver')
-  }
-  try {
-    const existing = loadWindowState() ?? {}
-    writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...existing, alwaysOnTop: enabled }))
-  } catch {}
 }
 
 function createWindow(): void {
@@ -156,7 +142,7 @@ function createWindow(): void {
   const persistBounds = () => {
     if (mainWindow.isDestroyed()) return
     const bounds = mainWindow.getNormalBounds()
-    const payload = { ...bounds, isMaximized: mainWindow.isMaximized(), alwaysOnTop: mainWindow.isAlwaysOnTop() }
+    const payload = { ...bounds, isMaximized: mainWindow.isMaximized() }
     try {
       writeFileSync(WINDOW_STATE_FILE, JSON.stringify(payload))
     } catch {}
@@ -181,8 +167,6 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     if (saved?.isMaximized) mainWindow.maximize()
-    // Restore the Copilot-style always-on-top flag (window hovers over other apps).
-    if (saved?.alwaysOnTop) setMainWindowAlwaysOnTop(true)
     mainWindow.show()
   })
 
@@ -518,16 +502,6 @@ app.whenReady().then(() => {
 
   handleChannel('app:set-login', (_event, enabled) => {
     app.setLoginItemSettings({ openAtLogin: enabled === true })
-    return { enabled: enabled === true }
-  })
-
-  // ── Always-on-top (Copilot-style hover over other apps) ──────────────────
-  handleChannel('window:get-always-ontop', () => ({
-    enabled: !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isAlwaysOnTop(),
-  }))
-
-  handleChannel('window:set-always-ontop', (_event, enabled) => {
-    setMainWindowAlwaysOnTop(enabled === true)
     return { enabled: enabled === true }
   })
 

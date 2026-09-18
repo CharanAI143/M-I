@@ -11,7 +11,6 @@ import { DashboardCardsCard } from '@/components/settings/DashboardCardsCard'
 import { SqlModeCard } from '@/components/settings/SqlModeCard'
 import { AiSettingsCard } from '@/components/settings/AiSettingsCard'
 import { ThemesCard } from '@/components/settings/ThemesCard'
-import { AlwaysOnTopCard } from '@/components/settings/AlwaysOnTopCard'
 import { COLOR_PRESETS } from '@/components/settings/settings-constants'
 import type { PosterCategory } from '@/lib/types'
 
@@ -166,9 +165,6 @@ export default function Settings() {
         openOtpDialog={ai.openOtpDialog}
         closeOtpDialog={ai.closeOtpDialog}
       />
-
-      {/* Always on Top */}
-      <AlwaysOnTopCard />
 
       {/* Themes */}
       <ThemesCard
