@@ -41,6 +41,10 @@ export interface LoginResult {
   enabled: boolean
 }
 
+export interface AlwaysOnTopResult {
+  enabled: boolean
+}
+
 // Maps every ipcMain.handle channel to its request/response shapes.
 // A new channel should be added here so all three layers stay in sync.
 export interface IpcChannels {
@@ -59,6 +63,8 @@ export interface IpcChannels {
   'alarm:get': { req: void; res: AlarmConfig }
   'app:get-login': { req: void; res: LoginResult }
   'app:set-login': { req: boolean; res: LoginResult }
+  'window:get-always-ontop': { req: void; res: AlwaysOnTopResult }
+  'window:set-always-ontop': { req: boolean; res: AlwaysOnTopResult }
 }
 
 export type IpcChannelName = keyof IpcChannels

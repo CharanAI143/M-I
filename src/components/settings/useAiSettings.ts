@@ -5,6 +5,9 @@ import { secureStoreApiKey } from '@/lib/secure'
 import type { AISettings } from '@/lib/types'
 import { PROVIDER_MODELS } from './settings-constants'
 
+// localStorage key that remembers whether the API-key field is locked.
+const LOCK_STORAGE_KEY = 'mi_api_key_locked'
+
 /**
  * Manages all local AI-settings UI state (provider, API key, model, lock, OTP).
  * The hook owns every field that the original Settings component used to own so
@@ -12,9 +15,11 @@ import { PROVIDER_MODELS } from './settings-constants'
  */
 export function useAiSettings({
   aiSettings,
+  aiLoaded,
   syncFrequency,
 }: {
   aiSettings: AISettings | undefined
+  aiLoaded: boolean
   syncFrequency: number
 }) {
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -31,11 +36,16 @@ export function useAiSettings({
   const [savingAi, setSavingAi] = useState(false)
   const [aiSaved, setAiSaved] = useState(false)
 
+  // The persisted lock flag is the source of truth. It is deliberately NOT
+  // gated on `aiSettings.apiKey` here: the key loads asynchronously from the
+  // main process, so at mount it is still empty and gating on it would drop a
+  // lock the user had explicitly set. Reconciliation with the real key happens
+  // once the settings finish hydrating (see the effect below).
   const [keyLocked, setKeyLocked] = useState<boolean>(
-    () => Boolean(aiSettings?.apiKey) && localStorage.getItem('mi_api_key_locked') === '1'
+    () => localStorage.getItem(LOCK_STORAGE_KEY) === '1'
   )
   const [lockMessage, setLockMessage] = useState<string>(
-    () => (Boolean(aiSettings?.apiKey) && localStorage.getItem('mi_api_key_locked') === '1' ? 'API KEY Locked' : '')
+    () => (localStorage.getItem(LOCK_STORAGE_KEY) === '1' ? 'API KEY Locked' : '')
   )
   // One-Time Password unlock for the API key. A fresh random 7-digit code is
   // generated every time the dialog opens; it is never reused — it expires
@@ -105,21 +115,35 @@ export function useAiSettings({
     setHasUnsavedAi(true)
   }, [apiKey, model, customEndpoint])
 
-  // The lock only makes sense when an actual API key exists. If the stored key
-  // disappears (empty / not yet loaded), clear a stale lock flag so the field
-  // is never stuck disabled with no key present.
+  // Drop the lock without showing the "Unlocked!" confirmation — used for
+  // programmatic resets where no user action prompted the change.
+  function clearLockSilently() {
+    setKeyLocked(false)
+    setLockMessage('')
+    localStorage.setItem(LOCK_STORAGE_KEY, '0')
+  }
+
+  // A key counts as present if it is either hydrated from the store or currently
+  // in the input (the latter covers a key that has been typed but not yet saved).
+  // Checking both avoids a race where this effect runs before the local `apiKey`
+  // state has sync'd from freshly hydrated settings.
+  const hasKey = Boolean(apiKey || aiSettings?.apiKey)
+
+  // Reconcile the persisted lock with whether a key is actually present.
+  // This runs only after the settings have hydrated (`aiLoaded`), because before
+  // that an empty `apiKey` merely means "not loaded yet" — treating it as "no
+  // key" is what used to wipe the lock flag on every startup. A lock with no key
+  // is meaningless, so it is cleared; a lock with a key is (re-)applied.
   useEffect(() => {
-    if (!aiSettings?.apiKey) {
-      if (keyLocked || localStorage.getItem('mi_api_key_locked') === '1') {
-        setKeyLocked(false)
-        setLockMessage('')
-        localStorage.setItem('mi_api_key_locked', '0')
-      }
-    } else if (localStorage.getItem('mi_api_key_locked') === '1' && !keyLocked) {
+    if (!aiLoaded) return
+    const flagged = localStorage.getItem(LOCK_STORAGE_KEY) === '1'
+    if (!hasKey) {
+      if (keyLocked || flagged) clearLockSilently()
+    } else if (flagged && !keyLocked) {
       setKeyLocked(true)
       setLockMessage('API KEY Locked')
     }
-  }, [aiSettings?.apiKey, keyLocked])
+  }, [aiLoaded, hasKey, keyLocked])
 
   async function handleSaveAiSettings() {
     setSavingAi(true)
@@ -133,6 +157,9 @@ export function useAiSettings({
       }
       updateSettings({ ai, syncInterval: syncRef.current })
       await secureStoreApiKey(apiKey)
+      // Deleting the key makes the lock meaningless; clear it so the field is
+      // usable again even if the settings were hydrated before this save.
+      if (!apiKey) clearLockSilently()
       // Remove any legacy plaintext key from the renderer database
       await dbStore.delete('ai_api_key')
       // ai_provider / ai_model / ai_custom_endpoint are persisted centrally by
@@ -170,7 +197,7 @@ export function useAiSettings({
 
   function persistLock(locked: boolean) {
     setKeyLocked(locked)
-    localStorage.setItem('mi_api_key_locked', locked ? '1' : '0')
+    localStorage.setItem(LOCK_STORAGE_KEY, locked ? '1' : '0')
     if (!locked) setLockMessage('API KEY Unlocked!')
     else setLockMessage('API KEY Locked')
   }
@@ -232,8 +259,7 @@ export function useAiSettings({
     setCustomEndpoint('')
     setApiKeyValid(null)
     setHasUnsavedAi(false)
-    setKeyLocked(false)
-    setLockMessage('API KEY Unlocked!')
+    clearLockSilently()
   }
 
   return {

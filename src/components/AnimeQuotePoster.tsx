@@ -175,7 +175,7 @@ function ImageViewer({ name, series, accent, image, quote, onClose }: { name: st
   )
 }
 
-export default function AnimeQuotePoster({ category = 'anime' }: { category?: PosterCategory }) {
+export default function AnimeQuotePoster({ category = 'all' }: { category?: PosterCategory }) {
   const { poster } = pickPoster(category)
   const [viewing, setViewing] = useState<string | null>(null)
   const dateStr = new Date().toLocaleDateString('en-US', {

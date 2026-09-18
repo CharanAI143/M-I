@@ -25,7 +25,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { settings, setProfiles, setActivities, setDailyTarget, setQuestionBank, updateSettings, setClockWarning } = useAppStore()
+  const { settings, setProfiles, setActivities, setDailyTarget, setQuestionBank, updateSettings, setAiLoaded, setClockWarning } = useAppStore()
 
   // Initial data load
   useEffect(() => {
@@ -93,6 +93,10 @@ function AppContent() {
             },
           })
         }
+        // Signal that the (asynchronously loaded) API key has been hydrated.
+        // The Settings lock relies on this to tell "no key stored" apart from
+        // "key not loaded yet" so a persisted lock is never wiped on startup.
+        setAiLoaded(true)
 
         // Load persisted SQL mode preference.
         const savedSqlMode = await dbStore.get('sql_mode')

@@ -11,7 +11,7 @@ export const defaultSettings: AppSettings = {
   contestRemindMinutes: 15,
   sqlMode: false,
   animePoster: true,
-  posterCategory: 'anime',
+  posterCategory: 'all',
   ai: {
     provider: 'openai',
     apiKey: '',
@@ -28,6 +28,7 @@ function createInitialState() {
     notes: [],
     questionBank: [],
     settings: defaultSettings,
+    aiLoaded: false,
     lastSynced: null,
     isSyncing: false,
     tagCounts: loadTagCounts(),
@@ -42,6 +43,7 @@ interface AppState {
   notes: Note[]
   questionBank: MockQuestion[]
   settings: AppSettings
+  aiLoaded: boolean
   lastSynced: string | null
   isSyncing: boolean
   tagCounts: Record<string, number>
@@ -53,6 +55,7 @@ interface AppState {
   setNotes: (notes: Note[]) => void
   setQuestionBank: (bank: MockQuestion[]) => void
   updateSettings: (settings: Partial<AppSettings>) => void
+  setAiLoaded: (loaded: boolean) => void
   setLastSynced: (time: string) => void
   setIsSyncing: (syncing: boolean) => void
   setTagCounts: (counts: Record<string, number>) => void
@@ -73,11 +76,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => ({
       settings: { ...state.settings, ...newSettings },
     })),
+  setAiLoaded: (aiLoaded) => set({ aiLoaded }),
   setLastSynced: (lastSynced) => set({ lastSynced }),
   setIsSyncing: (isSyncing) => set({ isSyncing }),
   setTagCounts: (tagCounts) => set({ tagCounts }),
   setClockWarning: (clockWarning) => set({ clockWarning }),
-  resetStore: () => set(createInitialState()),
+  // Preserve the "AI settings hydrated" flag across a data reset: the initial
+  // load has already happened, so future lock reconciliation should keep working.
+  resetStore: () => set((state) => ({ ...createInitialState(), aiLoaded: state.aiLoaded })),
 
   // Single source of truth for a manual / interval sync pass. Replaces the
   // duplicated sync loops that used to live in App (background) and Header

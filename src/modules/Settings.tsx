@@ -11,11 +11,13 @@ import { DashboardCardsCard } from '@/components/settings/DashboardCardsCard'
 import { SqlModeCard } from '@/components/settings/SqlModeCard'
 import { AiSettingsCard } from '@/components/settings/AiSettingsCard'
 import { ThemesCard } from '@/components/settings/ThemesCard'
+import { AlwaysOnTopCard } from '@/components/settings/AlwaysOnTopCard'
 import { COLOR_PRESETS } from '@/components/settings/settings-constants'
 import type { PosterCategory } from '@/lib/types'
 
 export default function Settings() {
   const settings = useAppStore((s) => s.settings)
+  const aiLoaded = useAppStore((s) => s.aiLoaded)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const lastSynced = useAppStore((s) => s.lastSynced)
 
@@ -25,7 +27,7 @@ export default function Settings() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const [colorScheme, setColorScheme] = useState<string>('blue')
 
-  const ai = useAiSettings({ aiSettings: settings.ai, syncFrequency })
+  const ai = useAiSettings({ aiSettings: settings.ai, aiLoaded, syncFrequency })
 
   // Load the current "open at login" state from the main process.
   useEffect(() => {
@@ -164,6 +166,9 @@ export default function Settings() {
         openOtpDialog={ai.openOtpDialog}
         closeOtpDialog={ai.closeOtpDialog}
       />
+
+      {/* Always on Top */}
+      <AlwaysOnTopCard />
 
       {/* Themes */}
       <ThemesCard

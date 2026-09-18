@@ -28,6 +28,10 @@ declare global {
       getLaunchAtLogin: () => Promise<IpcChannels['app:get-login']['res']>
       setLaunchAtLogin: (enabled: boolean) => Promise<IpcChannels['app:set-login']['res']>
     }
+    overlay?: {
+      get: () => Promise<IpcChannels['window:get-always-ontop']['res']>
+      set: (enabled: boolean) => Promise<IpcChannels['window:set-always-ontop']['res']>
+    }
   }
 }
 
