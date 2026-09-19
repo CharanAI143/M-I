@@ -35,17 +35,21 @@ export interface TimeWindow {
 }
 
 // Start-of-today and start-of-30-days-ago in epoch seconds, recomputed per call
-// so the window is always relative to "now".
+// so the window is always relative to "now". "Today" is the app's fixed UTC
+// day (see getToday in @/lib/utils), never the machine's local timezone.
 export function getTimeWindow(): TimeWindow {
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
-  const todayStartSec = Math.floor(todayStart.getTime() / 1000)
+  const now = new Date()
+  const todayStartUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const todayStartSec = Math.floor(todayStartUtc / 1000)
   return { todayStartSec, thirtyDaysAgoSec: todayStartSec - 30 * 24 * 60 * 60 }
 }
 
-// Formats an epoch-seconds timestamp as a local YYYY-MM-DD date key, matching
-// the application's date convention (see getToday in @/lib/utils).
+// Formats an epoch-seconds timestamp as a UTC YYYY-MM-DD date key, matching the
+// application's canonical date convention (UTC; see getToday in @/lib/utils).
 export function toDateKey(tsSec: number): string {
   const d = new Date(tsSec * 1000)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }

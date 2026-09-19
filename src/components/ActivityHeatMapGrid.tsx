@@ -1,10 +1,18 @@
 import { formatDate, parseDateKey } from '@/lib/utils'
 
 function formatDateKey(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(date.getUTCDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+// The app's day convention is fixed to UTC (see getToday in @/lib/utils), so
+// "today" is never the machine's local date. This also keeps every cell in the
+// grid aligned with the same day that activity rows are keyed by.
+function startOfUtcDay(time = Date.now()): Date {
+  const now = new Date(time)
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
 }
 
 function getHeatMapColor(count: number): string {
@@ -22,8 +30,7 @@ export function ActivityHeatMapGrid({
 }: {
   activities: Array<{ date: string; problems_solved?: number; created_at?: string }>
 }) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = startOfUtcDay()
 
   const submissionsByDate: Record<string, number> = {}
   activities.forEach((a) => {
@@ -36,17 +43,17 @@ export function ActivityHeatMapGrid({
   // Sunday of the current week, so today's week is the rightmost column and
   // its future days render as empty cells.
   const currentWeekStart = new Date(today)
-  currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay())
+  currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - currentWeekStart.getUTCDay())
 
   const startDate = new Date(currentWeekStart)
-  startDate.setDate(startDate.getDate() - (heatWeeks - 1) * 7)
+  startDate.setUTCDate(startDate.getUTCDate() - (heatWeeks - 1) * 7)
 
   const grid: number[][] = []
   for (let col = 0; col < heatWeeks; col++) {
     const week: number[] = []
     for (let row = 0; row < 7; row++) {
       const d = new Date(startDate)
-      d.setDate(d.getDate() + col * 7 + row)
+      d.setUTCDate(d.getUTCDate() + col * 7 + row)
       if (d > today) {
         week.push(-1)
       } else {
@@ -60,12 +67,11 @@ export function ActivityHeatMapGrid({
   // First date rendered by the heatmap (column 0, row 0), used for tooltips so
   // the shown date always matches the actual cell.
   const heatStartDate = (() => {
-    const t = new Date()
-    t.setHours(0, 0, 0, 0)
+    const t = startOfUtcDay()
     const weekStart = new Date(t)
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay())
+    weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay())
     const s = new Date(weekStart)
-    s.setDate(s.getDate() - (heatWeeks - 1) * 7)
+    s.setUTCDate(s.getUTCDate() - (heatWeeks - 1) * 7)
     return s
   })()
 
@@ -76,15 +82,15 @@ export function ActivityHeatMapGrid({
         <div className="flex gap-[3px] mb-1 text-[10px] text-muted-foreground">
           {grid.map((week, colIdx) => {
             const sunDate = new Date(heatStartDate)
-            sunDate.setDate(sunDate.getDate() + colIdx * 7)
+            sunDate.setUTCDate(sunDate.getUTCDate() + colIdx * 7)
             const month = sunDate.toLocaleString('en-US', { month: 'short' })
             let showLabel: boolean
             if (colIdx === 0) {
               showLabel = true
             } else {
               const prevDate = new Date(heatStartDate)
-              prevDate.setDate(prevDate.getDate() + (colIdx - 1) * 7)
-              showLabel = sunDate.getMonth() !== prevDate.getMonth()
+              prevDate.setUTCDate(prevDate.getUTCDate() + (colIdx - 1) * 7)
+              showLabel = sunDate.getUTCMonth() !== prevDate.getUTCMonth()
             }
             return (
               <div key={colIdx} className="flex-1 truncate text-center">
@@ -99,7 +105,7 @@ export function ActivityHeatMapGrid({
             <div key={colIdx} className="flex flex-1 flex-col gap-[3px]">
               {week.map((count, rowIdx) => {
                 const cellDate = new Date(heatStartDate)
-                cellDate.setDate(cellDate.getDate() + colIdx * 7 + rowIdx)
+                cellDate.setUTCDate(cellDate.getUTCDate() + colIdx * 7 + rowIdx)
                 return (
                   <div
                     key={rowIdx}

@@ -4,10 +4,12 @@ import type { GoalCategory, GoalType } from '@/lib/types'
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+// Date keys follow the app's fixed UTC day convention (see getToday in
+// @/lib/utils), never the machine's local calendar date.
 export function dateKey(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
 
@@ -20,25 +22,28 @@ export function formatClock(totalSeconds: number): string {
 
 export function rangeForType(type: GoalType): { start: string; end: string } {
   const now = new Date()
+  // Anchor the range to the current UTC day so the goal boundaries line up with
+  // the same day the activity/streak counters use.
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   if (type === 'daily') {
-    const k = dateKey(now)
+    const k = dateKey(today)
     return { start: k, end: k }
   }
   if (type === 'weekly') {
-    const start = new Date(now)
-    start.setDate(now.getDate() - now.getDay())
+    const start = new Date(today)
+    start.setUTCDate(today.getUTCDate() - today.getUTCDay())
     const end = new Date(start)
-    end.setDate(start.getDate() + 6)
+    end.setUTCDate(start.getUTCDate() + 6)
     return { start: dateKey(start), end: dateKey(end) }
   }
   if (type === 'monthly') {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1)
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1))
+    const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0))
     return { start: dateKey(start), end: dateKey(end) }
   }
-  const start = new Date(now)
-  start.setDate(now.getDate() - 29)
-  return { start: dateKey(start), end: dateKey(now) }
+  const start = new Date(today)
+  start.setUTCDate(today.getUTCDate() - 29)
+  return { start: dateKey(start), end: dateKey(today) }
 }
 
 export function unitFor(category: GoalCategory, type: GoalType): string {

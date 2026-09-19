@@ -695,15 +695,16 @@ export const DEFAULT_QUESTION_BANK: MockQuestion[] = [
 ]
 
 // This week's date range (Sunday → Saturday) used when posting an interview
-// as a Planner goal.
+// as a Planner goal. Matches the app's fixed UTC day convention.
 export function questionGoalRange(): { start: string; end: string } {
   const now = new Date()
-  const start = new Date(now)
-  start.setDate(now.getDate() - now.getDay())
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const start = new Date(today)
+  start.setUTCDate(today.getUTCDate() - today.getUTCDay())
   const end = new Date(start)
-  end.setDate(start.getDate() + 6)
+  end.setUTCDate(start.getUTCDate() + 6)
   const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
   return { start: fmt(start), end: fmt(end) }
 }
 

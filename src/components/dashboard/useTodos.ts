@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { dbApi } from '@/lib/db'
-import { getToday } from '@/lib/utils'
+import { getToday, getYesterday } from '@/lib/utils'
 import { pickDailyProblems, checkTodoCompletion } from '@/lib/problems'
 import { badgeIdForTag, saveTagCounts } from '@/lib/badges'
 import type { TodoItem, Profile } from '@/lib/types'
@@ -32,19 +32,17 @@ export function useTodos(profiles: Profile[]) {
     }
   }, [])
 
-  const streakActivityLoggedRef = useRef<string | null>(null)
+  // Highest 'todo' count already persisted for a given day (date + count).
+  // Lets the 60s poll rewrite today's row when the count grows without
+  // re-writing the same number on every tick.
+  const lastLoggedStreakRef = useRef<{ date: string; count: number }>({ date: '', count: 0 })
 
   // Retroactively log yesterday's activity on mount so the streak survives
   // across app restarts / rebuilds — exactly like LeetCode's "solve any day"
   // behaviour even when you weren't on the site that day.
   useEffect(() => {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const y = yesterday.getFullYear()
-    const m = String(yesterday.getMonth() + 1).padStart(2, '0')
-    const d = String(yesterday.getDate()).padStart(2, '0')
-    const yesterdayKey = `mi-tracker-todos-${y}-${m}-${d}`
-    const yesterdayDate = `${y}-${m}-${d}`
+    const yesterdayDate = getYesterday()
+    const yesterdayKey = `mi-tracker-todos-${yesterdayDate}`
 
     try {
       const stored: TodoItem[] = JSON.parse(localStorage.getItem(yesterdayKey) || '[]')
@@ -69,18 +67,20 @@ export function useTodos(profiles: Profile[]) {
     }
   }, [])
 
-  // Self-heal: a 'todo' activity row for today with zero done todos today is
-  // bogus — it was previously created when an already-solved problem leaked
-  // into today's list and got auto-checked from old history. Drop it so the
-  // streak doesn't count a day the user didn't actually solve.
+  // Self-heal: drop only a truly empty 'todo' row for today (problems_solved =
+  // 0). It was previously created when an already-solved problem leaked into
+  // today's list and got auto-checked from old history — the row was bogus and
+  // inflated the streak. Never delete a row that holds real solves: picking a
+  // fresh todo set turns every checkbox back to "undone", and wiping a
+  // legitimately earned day would reset the streak.
   useEffect(() => {
     const doneCount = todos.filter((t) => t.done).length
     if (doneCount !== 0) return
-    const hasTodayRow = useAppStore
+    const hasEmptyTodayRow = useAppStore
       .getState()
-      .activities.some((a) => a.date === getToday() && a.platform === 'todo')
-    if (!hasTodayRow) return
-    dbApi.run("DELETE FROM activity_logs WHERE date = ? AND platform = 'todo'", [getToday()]).then(async () => {
+      .activities.some((a) => a.date === getToday() && a.platform === 'todo' && a.problems_solved === 0)
+    if (!hasEmptyTodayRow) return
+    dbApi.run("DELETE FROM activity_logs WHERE date = ? AND platform = 'todo' AND problems_solved = 0", [getToday()]).then(async () => {
       const activities = await dbApi.loadActivities()
       useAppStore.getState().setActivities(activities)
     })
@@ -91,12 +91,8 @@ export function useTodos(profiles: Profile[]) {
 
   // Get exclude IDs from previous incomplete todos
   const getPreviousIncompleteIds = useCallback((): string[] => {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const y = yesterday.getFullYear()
-    const m = String(yesterday.getMonth() + 1).padStart(2, '0')
-    const d = String(yesterday.getDate()).padStart(2, '0')
-    const yesterdayKey = `mi-tracker-todos-${y}-${m}-${d}`
+    const yesterdayDate = getYesterday()
+    const yesterdayKey = `mi-tracker-todos-${yesterdayDate}`
     try {
       const stored = JSON.parse(localStorage.getItem(yesterdayKey) || '[]')
       return stored.filter((t: TodoItem) => !t.done && t.url).map((t: TodoItem) => t.id)
@@ -147,50 +143,81 @@ export function useTodos(profiles: Profile[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profiles])
 
-  // Auto-check solve status every 60 seconds
+  // Keep the latest todo list in a ref so checks always evaluate the currently
+  // displayed set — even after "Pick a fresh set" replaces the list with one of
+  // the same length. The ref avoids tearing down the interval on every render.
+  const todosRef = useRef(todos)
+  useEffect(() => {
+    todosRef.current = todos
+  }, [todos])
+
+  // Auto-check solve status every 30 seconds, plus immediately whenever the
+  // window regains focus, so the streak updates quickly after solving. The
+  // guard skips a poll when a previous network check hasn't returned yet.
+  const checkingRef = useRef(false)
+
   useEffect(() => {
     if (todos.length === 0) return
 
     const check = async () => {
-      const newlySolved = await checkTodoCompletion(todos, profiles)
-      if (newlySolved.size > 0) {
-        setTodos((prev) => {
-          const updated = prev.map((t) =>
-            newlySolved.has(t.id) ? { ...t, done: true } : t
-          )
-          persistTodos(updated)
+      if (checkingRef.current) return
+      checkingRef.current = true
+      try {
+        const newlySolved = await checkTodoCompletion(todosRef.current, profiles)
+        if (newlySolved.size > 0) {
+          setTodos((prev) => {
+            const updated = prev.map((t) =>
+              newlySolved.has(t.id) ? { ...t, done: true } : t
+            )
+            persistTodos(updated)
 
-          // Tally topic tags for badges from the todos we just detected as solved.
-          const solvedTodos = prev.filter((t) => newlySolved.has(t.id))
-          if (solvedTodos.length > 0) {
-            const counts = { ...useAppStore.getState().tagCounts }
-            solvedTodos.forEach((t) => {
-              ;(t.tags ?? []).forEach((tag) => {
-                const id = badgeIdForTag(tag)
-                if (id) counts[id] = (counts[id] ?? 0) + 1
+            // Tally topic tags for badges from the todos we just detected as solved.
+            const solvedTodos = prev.filter((t) => newlySolved.has(t.id))
+            if (solvedTodos.length > 0) {
+              const counts = { ...useAppStore.getState().tagCounts }
+              solvedTodos.forEach((t) => {
+                ;(t.tags ?? []).forEach((tag) => {
+                  const id = badgeIdForTag(tag)
+                  if (id) counts[id] = (counts[id] ?? 0) + 1
+                })
               })
-            })
-            saveTagCounts(counts)
-            useAppStore.getState().setTagCounts(counts)
-          }
+              saveTagCounts(counts)
+              useAppStore.getState().setTagCounts(counts)
+            }
 
-          const newDone = updated.filter((t) => t.done).length
-          // A day counts toward the streak when 3 or more problems are solved.
-          // Log the day's activity with the actual count; the ref stores the date
-          // so it resets at midnight.
-          const statsToday = getToday()
-          if (newDone >= 1 && streakActivityLoggedRef.current !== statsToday) {
-            streakActivityLoggedRef.current = statsToday
-            logTodoCompletionActivity(newDone)
-          }
-          return updated
-        })
+            const newDone = updated.filter((t) => t.done).length
+            // logActivity is an upsert keyed on (platform, date), so each new
+            // solve simply bumps today's count upward (1 -> 2 -> 3); the streak
+            // counts the day once it reaches 3+. The old "once per day" gate
+            // froze the row at 1 or 2 when problems were solved across several
+            // polls; instead log whenever the count for today actually grows.
+            const statsToday = getToday()
+            const last = lastLoggedStreakRef.current
+            if (
+              newDone > 0 &&
+              (last.date !== statsToday || last.count !== newDone)
+            ) {
+              lastLoggedStreakRef.current = { date: statsToday, count: newDone }
+              logTodoCompletionActivity(newDone)
+            }
+            return updated
+          })
+        }
+      } catch {
+        // ignore — network failures retry on the next poll
+      } finally {
+        checkingRef.current = false
       }
     }
 
     check()
-    const interval = setInterval(check, 60_000)
-    return () => clearInterval(interval)
+    const interval = setInterval(check, 30_000)
+    const onFocus = () => check()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todos.length, profiles])
 

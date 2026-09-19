@@ -83,14 +83,14 @@ async function fetchLeetCodeProblems(difficulty: string, limit: number): Promise
   }
 }
 
-// Start of the current local day as Unix epoch seconds. A streak day only
-// counts when a problem is actually solved that day, so solves from earlier
-// (e.g. an old problem that happens to land in today's todo) must not advance
-// today's streak.
+// Start of the current day (the app's fixed UTC midnight) as Unix epoch
+// seconds. A streak day only counts when a problem is actually solved that day,
+// so solves from earlier (e.g. an old problem that happens to land in today's
+// todo) must not advance today's streak.
 function startOfTodaySeconds(): number {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return Math.floor(d.getTime() / 1000)
+  const now = new Date()
+  const todayMidnightUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  return Math.floor(todayMidnightUtc / 1000)
 }
 
 export async function checkTodoCompletion(

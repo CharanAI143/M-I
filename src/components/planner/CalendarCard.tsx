@@ -21,24 +21,27 @@ export function CalendarCard({
   todaySolved,
   activities,
 }: CalendarCardProps) {
+  // The grid is rendered in the app's fixed UTC day convention (matching the
+  // `today`/`todayKey` date keys and the UTC dateKey helper), so the "today"
+  // ring always lands on the same day the streak/activity counters use.
   const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth())
+  const [year, setYear] = useState(now.getUTCFullYear())
+  const [month, setMonth] = useState(now.getUTCMonth())
   const [selected, setSelected] = useState<string>(today)
 
   const cells = useMemo(() => {
-    const first = new Date(year, month, 1)
-    const startOffset = first.getDay()
+    const first = new Date(Date.UTC(year, month, 1))
+    const startOffset = first.getUTCDay()
     const start = new Date(first)
-    start.setDate(first.getDate() - startOffset)
+    start.setUTCDate(first.getUTCDate() - startOffset)
     const items: Array<{ date: string; day: number; inMonth: boolean }> = []
     for (let i = 0; i < 42; i++) {
       const d = new Date(start)
-      d.setDate(start.getDate() + i)
+      d.setUTCDate(start.getUTCDate() + i)
       items.push({
         date: dateKey(d),
-        day: d.getDate(),
-        inMonth: d.getMonth() === month,
+        day: d.getUTCDate(),
+        inMonth: d.getUTCMonth() === month,
       })
     }
     return items
@@ -51,12 +54,12 @@ export function CalendarCard({
     if (month === 11) { setMonth(0); setYear(year + 1) } else setMonth(month + 1)
   }
   const goToday = () => {
-    setYear(now.getFullYear())
-    setMonth(now.getMonth())
+    setYear(now.getUTCFullYear())
+    setMonth(now.getUTCMonth())
     setSelected(today)
   }
 
-  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   const selSolved = solvedByDate.get(selected) ?? 0
   const selMinutes = focusMinutesByDate.get(selected) ?? 0
   const selDate = new Date(selected)
